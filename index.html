@@ -338,30 +338,48 @@ function cleanLot(value) {
   const match = raw.match(/\d+/);
   return match ? String(parseInt(match[0], 10)) : raw;
 }
+function looksLikePhoneLabel(value) {
+  return /cell|phone|home|mobile|work/i.test(String(value || ''));
+}
+function digitsOnly(value) {
+  return String(value || '').replace(/\D/g, '');
+}
 function buildDirectoryFromRows(rows) {
   const next = {};
   rows.forEach(r => {
     const lot = cleanLot(field(r, ['Lot', 'LotNumber', 'Lot #', 'Lot No']));
     if (!lot) return;
+    const base = directory[lot] || {};
+    const basePhoneByNumber = {};
+    (base.phones || []).forEach(p => { basePhoneByNumber[digitsOnly(p.number)] = p; });
+
     const phones = [];
     ['1','2','3'].forEach(n => {
       const label = field(r, ['Phone' + n + 'Label', 'Phone ' + n + ' Label', 'Phone' + n + ' Label', 'Phone ' + n + 'Label']);
       const number = field(r, ['Phone' + n, 'Phone ' + n, 'Phone' + n + 'Number', 'Phone ' + n + ' Number']);
-      if (number) phones.push({label: label || 'Phone', number});
+      if (number) {
+        const matchedBase = basePhoneByNumber[digitsOnly(number)];
+        phones.push({label: label || (matchedBase && matchedBase.label) || 'Phone', number});
+      }
     });
+
     const emails = [];
     ['1','2'].forEach(n => {
       const label = field(r, ['Email' + n + 'Label', 'Email ' + n + ' Label', 'Email' + n + ' Label', 'Email ' + n + 'Label']);
       const email = field(r, ['Email' + n, 'Email ' + n, 'Email' + n + 'Address', 'Email ' + n + ' Address']);
       if (email) emails.push({label: label || 'Email', email});
     });
+
+    let owners = field(r, ['Owners', 'Owner', 'OwnerName', 'Owner Name', 'Homeowner', 'Homeowners', 'HomeownerName', 'Homeowner Name', 'ResidentName', 'Resident Name', 'Residents', 'Name']);
+    if (!owners || looksLikePhoneLabel(owners)) owners = base.owners || owners || '';
+
     next[lot] = {
       lot,
-      owners: field(r, ['Owners', 'Owner', 'Homeowner', 'Homeowners', 'Resident', 'Residents']),
-      address: field(r, ['Address', 'StreetAddress', 'Street Address']),
-      phones,
-      emails,
-      notes: field(r, ['Notes', 'Note'])
+      owners,
+      address: field(r, ['Address', 'StreetAddress', 'Street Address']) || base.address || '',
+      phones: phones.length ? phones : (base.phones || []),
+      emails: emails.length ? emails : (base.emails || []),
+      notes: field(r, ['Notes', 'Note']) || base.notes || ''
     };
   });
   return next;
