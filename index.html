@@ -60,6 +60,12 @@
   .contactDetails a { color:#1f4d27; text-decoration:none; font-weight:700; }
   .subhead { margin:14px 0 8px; color:var(--green); font-size:16px; }
 
+
+  .docCard { display:block; border:1px solid var(--border); background:#fff; border-radius:12px; padding:12px; margin:9px 0; text-decoration:none; color:#111827; }
+  .docCard:hover { background:#eef5ed; }
+  .docTitle { font-weight:700; color:var(--green); margin-bottom:4px; }
+  .docDesc { color:var(--muted); font-size:14px; line-height:1.35; }
+
   @media (max-width: 980px) {
     body { padding-bottom: 48vh; }
     header { padding:10px 12px; gap:10px; position: sticky; top: 0; z-index: 40; }
@@ -270,6 +276,8 @@ const communitySearchText = 'clubhouse community board directors president kenda
 
 const RESIDENTS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1wnKy_3h__z4FXczDdboV2dnCW52M6jQ_uoWjk_9EgvPNMaTMcA1WOQarzLh1WdvpuSRyjF40T46D/pub?gid=0&single=true&output=csv';
 const COMMUNITY_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1wnKy_3h__z4FXczDdboV2dnCW52M6jQ_uoWjk_9EgvPNMaTMcA1WOQarzLh1WdvpuSRyjF40T46D/pub?gid=471146260&single=true&output=csv';
+const DOCUMENTS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1wnKy_3h__z4FXczDdboV2dnCW52M6jQ_uoWjk_9EgvPNMaTMcA1WOQarzLh1WdvpuSRyjF40T46D/pub?gid=1512534061&single=true&output=csv';
+let documentLinks = [];
 let communityAddress = '4350 North Star Drive<br>Shingle Springs, CA 95682';
 let sheetStatus = 'Using built-in directory data.';
 
@@ -392,14 +400,17 @@ async function fetchCSVObjects(url) {
 }
 async function loadSheetData() {
   try {
-    const [residentRows, communityRows] = await Promise.all([
+    const [residentRows, communityRows, documentsRows] = await Promise.all([
       fetchCSVObjects(RESIDENTS_CSV_URL),
-      fetchCSVObjects(COMMUNITY_CSV_URL)
+      fetchCSVObjects(COMMUNITY_CSV_URL),
+      fetchCSVObjects(DOCUMENTS_CSV_URL)
     ]);
     const freshDirectory = buildDirectoryFromRows(residentRows);
     if (Object.keys(freshDirectory).length) directory = freshDirectory;
     const freshCommunity = buildCommunityFromRows(communityRows);
     if (communityRows.length) communitySections = freshCommunity;
+    const freshDocuments = buildDocumentsFromRows(documentsRows);
+    if (freshDocuments.length) documentLinks = freshDocuments;
     sheetStatus = 'Directory updated from Google Sheets.';
   } catch (err) {
     console.warn(err);
@@ -673,6 +684,30 @@ function groupRows(rows, type) {
   }
   return rows.map(contactAccordion).join('') || '<p class="small">No contacts listed.</p>';
 }
+
+function normalizeSectionName(v) {
+  return String(v || '').trim().toLowerCase();
+}
+function buildDocumentsFromRows(rows) {
+  return rows.map(r => ({
+    section: String(r.Section || '').trim(),
+    title: String(r.Title || '').trim(),
+    description: String(r.Description || '').trim(),
+    url: String(r.URL || r.Url || r.Link || '').trim()
+  })).filter(d => d.section && d.title);
+}
+function renderDocumentCards(sectionName) {
+  const wanted = normalizeSectionName(sectionName);
+  const docs = documentLinks.filter(d => normalizeSectionName(d.section) === wanted);
+  if (!docs.length) return '';
+  return `<h4 class="subhead">Resources</h4>` + docs.map(d => {
+    const title = escHtml(d.title);
+    const desc = escHtml(d.description || '');
+    const url = escHtml(d.url || '#');
+    const body = `<div class="docTitle">📄 ${title}</div>${desc ? `<div class="docDesc">${desc}</div>` : ''}`;
+    return d.url ? `<a class="docCard" href="${url}" target="_blank" rel="noopener">${body}</a>` : `<div class="docCard">${body}</div>`;
+  }).join('');
+}
 function renderCommunityTab(tab='board') {
   const sec = communitySections[tab] || communitySections.board;
   let rows = '';
@@ -688,11 +723,13 @@ function renderCommunityTab(tab='board') {
       ${contactAccordion(['Contact', 'Kendall McKenzie', '530-363-2741', 'president.hde@gmail.com', ''])}
     `;
   } else if (tab === 'docs') {
-    rows = sec.rows.map(r => {
+    const sheetDocs = renderDocumentCards('Documents');
+    const builtInDocs = sec.rows.map(r => {
       const note = r[4] || r[1] || '';
       const url = String(note).startsWith('http') ? note : (String(note).includes('managementtrust.com') ? 'https://www.managementtrust.com' : '');
       return `<div class="contactrow"><b>${escHtml(r[0] || 'HOA Documents')}</b><br>${url ? `<a href="${url}" target="_blank" rel="noopener">${escHtml(note)}</a>` : escHtml(note)}</div>`;
-    }).join('') || '<p class="small">No document link listed.</p>';
+    }).join('');
+    rows = sheetDocs || builtInDocs || '<p class="small">No document link listed.</p>';
   } else if (tab === 'management') {
     rows = sec.rows.map(r => {
       const phone = r[2] ? `<br><a href="${telHref(r[2])}">${escHtml(r[2])}</a>` : '';
@@ -701,6 +738,8 @@ function renderCommunityTab(tab='board') {
     }).join('') + '<div class="notice"><b>Please direct neighborhood concerns to a Board Member, not The Management Trust.</b></div>';
   } else if (tab === 'committees' || tab === 'clubs') {
     rows = groupRows(sec.rows, tab);
+  } else if (tab === 'arc') {
+    rows = (sec.rows.map(contactAccordion).join('') || '<p class="small">No ARC contacts listed.</p>') + renderDocumentCards('ARC');
   } else {
     rows = sec.rows.map(contactAccordion).join('');
   }
