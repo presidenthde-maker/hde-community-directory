@@ -1,3 +1,3 @@
 # HdE Community Directory
 
-Live Google Sheets version with fixed mobile map view.
+Mobile bottom sheet cleaned: draggable, owner names visible, no swipe text.
