@@ -1,8 +1,5 @@
 # HdE Community Directory
 
-Interactive Hacienda de Estrellas homeowner directory.
+Interactive Hacienda de Estrellas community directory.
 
-Board review password: **HDE2026**
-
-## GitHub Pages
-Upload the files in this folder to the repository root, then enable GitHub Pages from Settings > Pages.
+Upload `index.html` and `.nojekyll` to GitHub Pages.
