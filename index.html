@@ -36,6 +36,7 @@
   .details h2 { font-size:28px; margin-bottom:18px; }
   .sheetHandle { display:none; }
   .mobileSummary { display:none; }
+  .desktopOwnerSummary { font-size:17px; font-weight:700; color:#111827; line-height:1.35; margin:-10px 0 14px; }
   .section { border-top:1px solid var(--border); padding:15px 0; }
   .section h3 { color:var(--green); margin:0 0 10px; font-size:18px; }
   .value { font-weight:700; line-height:1.5; }
@@ -105,6 +106,7 @@
     .details.dragging { transition: none; }
     .details.collapsed .section, .details.collapsed .tabs { display:none; }
     .details.expanded .mobileSummary { display:none; }
+    .desktopOwnerSummary { display:none; }
     .mobileSummary { display:block; font-size:16px; font-weight:700; line-height:1.25; margin:2px 0 8px; color:#111827; }
     .details.collapsed h2 { margin-bottom:2px; }
     .details { overscroll-behavior: contain; }
@@ -321,30 +323,45 @@ function cleanLot(value) {
   const match = raw.match(/\d+/);
   return match ? String(parseInt(match[0], 10)) : raw;
 }
+function normalizeHeaderName(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function getField(row, names) {
+  for (const name of names) {
+    if (Object.prototype.hasOwnProperty.call(row, name) && String(row[name] || '').trim()) return String(row[name] || '').trim();
+  }
+  const lookup = {};
+  Object.keys(row || {}).forEach(k => lookup[normalizeHeaderName(k)] = row[k]);
+  for (const name of names) {
+    const key = normalizeHeaderName(name);
+    if (lookup[key] && String(lookup[key] || '').trim()) return String(lookup[key] || '').trim();
+  }
+  return '';
+}
 function buildDirectoryFromRows(rows) {
   const next = {};
   rows.forEach(r => {
-    const lot = cleanLot(r.Lot);
+    const lot = cleanLot(getField(r, ['Lot', 'Lot #', 'Lot Number', 'LotNumber']));
     if (!lot) return;
     const phones = [];
-    ['1','2','3'].forEach(n => {
-      const label = r['Phone' + n + 'Label'] || r['Phone ' + n + ' Label'] || '';
-      const number = r['Phone' + n] || r['Phone ' + n] || '';
-      if (number) phones.push({label: label || 'Phone', number});
+    ['1','2','3','4'].forEach(n => {
+      const label = getField(r, ['Phone' + n + 'Label', 'Phone ' + n + ' Label', 'Phone ' + n + 'Label', 'Phone' + n + ' Label']);
+      const number = getField(r, ['Phone' + n, 'Phone ' + n, 'Phone' + n + 'Number', 'Phone ' + n + ' Number']);
+      if (number && /\d/.test(number)) phones.push({label: label || 'Phone', number});
     });
     const emails = [];
-    ['1','2'].forEach(n => {
-      const label = r['Email' + n + 'Label'] || r['Email ' + n + ' Label'] || '';
-      const email = r['Email' + n] || r['Email ' + n] || '';
-      if (email) emails.push({label: label || 'Email', email});
+    ['1','2','3'].forEach(n => {
+      const label = getField(r, ['Email' + n + 'Label', 'Email ' + n + ' Label', 'Email ' + n + 'Label', 'Email' + n + ' Label']);
+      const email = getField(r, ['Email' + n, 'Email ' + n, 'Email' + n + 'Address', 'Email ' + n + ' Address']);
+      if (email && email.includes('@')) emails.push({label: label || 'Email', email});
     });
     next[lot] = {
       lot,
-      owners: r.Owners || '',
-      address: r.Address || '',
+      owners: getField(r, ['Owners', 'Owner', 'Owner(s)', 'Owner Names', 'Resident', 'Residents', 'Resident Names', 'Name', 'Names']),
+      address: getField(r, ['Address', 'Property Address', 'Street Address']),
       phones,
       emails,
-      notes: r.Notes || ''
+      notes: getField(r, ['Notes', 'Note', 'Comments', 'Comment'])
     };
   });
   return next;
@@ -782,15 +799,17 @@ function showDetails(lot, region=null) {
   selectedLot = incomingLot;
   if (selectedLot === 'clubhouse') { showCommunityDetails(region); return; }
   const d = directory[lot] || {lot:lot, owners:'Lot '+lot, address:'', phones:[], emails:[], notes:''};
-  const phoneHtml = (d.phones||[]).map(p=>`<div class="phone"><b>${p.label||'Phone'}</b><br><a href="tel:${String(p.number).replace(/\D/g,'')}">${fmtPhone(p.number)}</a></div>`).join('') || '<p class="small">No phone listed</p>';
-  const emailHtml = (d.emails||[]).map(e=>`<div class="email"><b>${e.label||'Email'}</b><br><a href="mailto:${e.email}">${e.email}</a></div>`).join('') || '<p class="small">No email listed</p>';
+  const ownerLine = escHtml(d.owners || '');
+  const phoneHtml = (d.phones||[]).map(p=>`<div class="phone"><b>${escHtml(p.label||'Phone')}</b><br><a href="${telHref(p.number)}">${escHtml(fmtPhone(p.number))}</a></div>`).join('') || '<p class="small">No phone listed</p>';
+  const emailHtml = (d.emails||[]).map(e=>`<div class="email"><b>${escHtml(e.label||'Email')}</b><br><a href="${mailHref(e.email)}">${escHtml(e.email)}</a></div>`).join('') || '<p class="small">No email listed</p>';
   setDetailsHTML(`
-    <h2>Lot ${lot}</h2>
-    <div class="mobileSummary">${d.owners||''}</div>
-    <div class="section"><h3>📍 Address</h3><div>${d.address||'Address not listed'}</div></div>
+    <h2>Lot ${escHtml(lot)}</h2>
+    ${ownerLine ? `<div class="desktopOwnerSummary">${ownerLine}</div>` : ''}
+    <div class="mobileSummary">${ownerLine}</div>
+    <div class="section"><h3>📍 Address</h3><div>${escHtml(d.address||'Address not listed')}</div></div>
     <div class="section"><h3>☎ Phone Numbers</h3>${phoneHtml}</div>
     <div class="section"><h3>✉ Email</h3>${emailHtml}</div>
-    <div class="section"><h3>▣ Notes</h3><div>${d.notes||'--'}</div></div>`, 'collapsed');
+    <div class="section"><h3>▣ Notes</h3><div>${escHtml(d.notes||'--')}</div></div>`, 'collapsed');
   if(region) drawHighlight(region, lot); else drawHighlight(null, lot);
 }
 function selectAt(clientX,clientY) {
