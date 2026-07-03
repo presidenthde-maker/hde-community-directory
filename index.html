@@ -266,7 +266,7 @@ let communitySections = {
     ]
   }
 };
-const communitySearchText = 'clubhouse community board directors president kendall mckenzie vice president eugene haydu treasurer sherry steiner secretary kim mcpherson member at large lee tannenbaum arc janet lundquist ken murch spencer weston events seeta conwell welcoming mary schulze bunco donna kamrath injured wildlife nancy barbachano gate codes pool court keys restroom keys gate clickers management trust';
+const communitySearchText = 'clubhouse community board directors president kendall mckenzie vice president eugene haydu treasurer sherry steiner secretary kim mcpherson member at large lee tannenbaum arc janet lundquist ken murch spencer weston events seeta conwell welcoming mary schulze bunco donna kamrath injured wildlife nancy barbachano craft day sherry steiner gate codes pool court keys restroom keys gate clickers management trust';
 
 const RESIDENTS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1wnKy_3h__z4FXczDdboV2dnCW52M6jQ_uoWjk_9EgvPNMaTMcA1WOQarzLh1WdvpuSRyjF40T46D/pub?gid=0&single=true&output=csv';
 const COMMUNITY_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1wnKy_3h__z4FXczDdboV2dnCW52M6jQ_uoWjk_9EgvPNMaTMcA1WOQarzLh1WdvpuSRyjF40T46D/pub?gid=471146260&single=true&output=csv';
@@ -378,8 +378,8 @@ function buildCommunityFromRows(rows) {
     else if (secLower.includes('document')) sections.docs.rows.push([role || section, name || notes, phone, email, notes]);
     else if (secLower.includes('management')) sections.management.rows.push([role || section, name || notes, phone, email, notes]);
     else if (secLower.includes('committees') || secLower.includes('clubs') || secLower.includes('groups')) {
-      if (roleLower.includes('clubhouse') || roleLower.includes('tables') || roleLower.includes('chairs')) sections.clubhouse.rows.push(row);
-      else if (roleLower.includes('bunco') || roleLower.includes('wildlife')) sections.clubs.rows.push(row);
+      if (roleLower.includes('bunco') || roleLower.includes('wildlife') || roleLower.includes('craft')) sections.clubs.rows.push(row);
+      else if (roleLower.includes('clubhouse') || roleLower.includes('tables') || roleLower.includes('chairs')) sections.committees.rows.push(row);
       else sections.committees.rows.push(row);
     }
   });
@@ -650,15 +650,26 @@ function groupRows(rows, type) {
   if (type === 'committees') {
     const events = rows.filter(r => String(r[0]).toLowerCase().includes('event'));
     const welcome = rows.filter(r => String(r[0]).toLowerCase().includes('welcom'));
-    const other = rows.filter(r => !events.includes(r) && !welcome.includes(r));
+    const clubhouse = rows.filter(r => {
+      const role = String(r[0]).toLowerCase();
+      return role.includes('clubhouse') || role.includes('tables') || role.includes('chairs');
+    });
+    const used = new Set([...events, ...welcome, ...clubhouse]);
+    const other = rows.filter(r => !used.has(r) && !String(r[0]).toLowerCase().includes('craft'));
     let html = '';
     if (events.length) html += `<h4 class="subhead">Events Committee</h4>${events.map(contactAccordion).join('')}`;
     if (welcome.length) html += `<h4 class="subhead">Welcoming Committee</h4>${welcome.map(contactAccordion).join('')}`;
-    if (other.length) html += `<h4 class="subhead">Other Committees</h4>${other.map(contactAccordion).join('')}`;
+    if (clubhouse.length) html += `<h4 class="subhead">Clubhouse Committee</h4>${clubhouse.map(contactAccordion).join('')}`;
+    if (other.length) html += other.map(contactAccordion).join('');
     return html || '<p class="small">No committee contacts listed.</p>';
   }
   if (type === 'clubs') {
-    return rows.map(contactAccordion).join('') || '<p class="small">No clubs or groups listed.</p>';
+    let html = '';
+    rows.forEach(r => {
+      const label = escHtml(r[0] || 'Club / Group');
+      html += `<h4 class="subhead">${label}</h4>${contactAccordion(r)}`;
+    });
+    return html || '<p class="small">No clubs or groups listed.</p>';
   }
   return rows.map(contactAccordion).join('') || '<p class="small">No contacts listed.</p>';
 }
@@ -667,9 +678,15 @@ function renderCommunityTab(tab='board') {
   let rows = '';
   if (tab === 'codes') {
     rows = sec.rows.map(r => `<div class="codebox"><b>${escHtml(r[0])}</b><br>${escHtml(r[1] || r[4] || '')}</div>`).join('');
-    rows += `<h4 class="subhead">Need a gate clicker?</h4>${contactAccordion(['Contact', 'Kendall McKenzie', '530-363-2741', 'president.hde@gmail.com', ''])}`;
   } else if (tab === 'keys') {
-    rows = sec.rows.map(contactAccordion).join('') || contactAccordion(['Court Keys, Restroom Keys, Gate Clickers', 'Kendall McKenzie', '530-363-2741', 'president.hde@gmail.com', '']);
+    rows = `
+      <h4 class="subhead">Court Keys</h4>
+      ${contactAccordion(['Contact', 'Kendall McKenzie', '530-363-2741', 'president.hde@gmail.com', ''])}
+      <h4 class="subhead">Restroom Keys</h4>
+      ${contactAccordion(['Contact', 'Kendall McKenzie', '530-363-2741', 'president.hde@gmail.com', ''])}
+      <h4 class="subhead">Need a Gate Clicker?</h4>
+      ${contactAccordion(['Contact', 'Kendall McKenzie', '530-363-2741', 'president.hde@gmail.com', ''])}
+    `;
   } else if (tab === 'docs') {
     rows = sec.rows.map(r => {
       const note = r[4] || r[1] || '';
@@ -703,7 +720,6 @@ function showCommunityDetails(region=null, tab='board') {
     <div class="tabs">
       <button class="tabbtn active" type="button" data-tab="board">Board</button>
       <button class="tabbtn" type="button" data-tab="arc">ARC</button>
-      <button class="tabbtn" type="button" data-tab="clubhouse">Clubhouse</button>
       <button class="tabbtn" type="button" data-tab="committees">Committees</button>
       <button class="tabbtn" type="button" data-tab="clubs">Clubs & Groups</button>
       <button class="tabbtn" type="button" data-tab="codes">Gate Codes</button>
@@ -839,7 +855,7 @@ function search(q) {
 }
 document.getElementById('search').addEventListener('input', e=>search(e.target.value));
 initSheetDrag();
-colorMap.onload = async () => { hctx.drawImage(colorMap,0,0,W,H); resetView(); await loadSheetData(); showDetails('44'); setInterval(loadSheetData, 300000); };
+colorMap.onload = async () => { hctx.drawImage(colorMap,0,0,W,H); resetView(); await loadSheetData(); showDetails('clubhouse'); setInterval(loadSheetData, 300000); };
 window.addEventListener('resize', resetView);
 mapLayer.addEventListener('load', resetView);
 if(colorMap.complete) colorMap.onload();
