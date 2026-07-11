@@ -173,6 +173,91 @@
     }
   }
 
+
+  .remember-login {
+    display:flex;
+    align-items:flex-start;
+    gap:9px;
+    margin:0 0 15px;
+    text-align:left;
+    color:#475467;
+    font-size:14px;
+    line-height:1.35;
+  }
+  .remember-login input {
+    width:auto;
+    margin:2px 0 0;
+    padding:0;
+    flex:0 0 auto;
+  }
+
+  .directoryList { display:flex; flex-direction:column; gap:7px; }
+  .directoryEntry {
+    width:100%;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:#fff;
+    padding:10px 12px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:12px;
+    align-items:center;
+    text-align:left;
+    cursor:pointer;
+    font:inherit;
+  }
+  .directoryEntry:hover,
+  .directoryEntry:focus {
+    background:#eef5ed;
+    border-color:#9db69f;
+    outline:none;
+  }
+  .directoryEntry .ownerName {
+    font-weight:700;
+    color:#111827;
+    line-height:1.3;
+  }
+  .directoryEntry .lotNumber {
+    color:var(--green);
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .panelHeading {
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    align-items:center;
+    margin-bottom:14px;
+  }
+  .panelHeading h2 { margin:0; }
+  .panelSubtext { margin:-4px 0 14px; }
+
+  @media (min-width:981px) {
+    html, body { height:100%; overflow:hidden; }
+    body { display:flex; flex-direction:column; }
+    header { flex:0 0 auto; }
+    main {
+      flex:1 1 auto;
+      min-height:0;
+      height:auto;
+      overflow:hidden;
+      grid-template-columns:210px minmax(420px,1fr) 390px;
+    }
+    .panel.left,
+    .mapbox,
+    .details {
+      min-height:0;
+      height:100%;
+    }
+    .panel.left { overflow-y:auto; }
+    .mapbox { min-height:0; }
+    #stage { min-height:0; height:100%; }
+    .details {
+      overflow-y:auto;
+      overscroll-behavior:contain;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -182,6 +267,11 @@
     <p>Verify that you are a current resident to open the community directory.</p>
     <input id="directoryLot" type="text" inputmode="numeric" autocomplete="off" placeholder="Lot number" aria-label="Lot number" />
     <input id="directoryLastName" type="text" autocomplete="family-name" placeholder="Last name" aria-label="Last name" />
+
+    <label class="remember-login">
+      <input id="rememberLogin" type="checkbox" />
+      Remember my lot number and last name on this device
+    </label>
     <button id="passwordButton" type="button">Open Directory</button>
     <div id="passwordError" aria-live="polite"></div>
     <div class="privacy-notice">
@@ -196,14 +286,14 @@
     <div><h1>Hacienda de Estrellas</h1><div>Homeowner Directory</div></div>
   </div>
   <div class="search"><input id="search" placeholder="Search by name, lot #, street..." /><span>⌕</span></div>
-  <button class="topbtn" type="button">Directory</button>
-  <button class="topbtn" type="button">Documents</button>
+  <button class="topbtn" id="directoryButton" type="button">Directory</button>
+  <button class="topbtn" id="documentsButton" type="button">Documents</button>
   <button class="topbtn logout-btn" id="logoutButton" type="button">Log Out</button>
 </header>
 <main>
   <aside class="panel left">
-    <h2>Map Tools</h2>
-    <p class="small">Click any lot on the map to view homeowner details. The black lot lines, street names, and lot numbers stay visible. The hidden color map is only used for clicks.</p>
+    <h2>Map</h2>
+    <p class="small">Click a lot to view homeowner information. Use the search bar to find a homeowner, lot number, or street.</p>
     <hr>
     <button class="toolbtn" id="zoomIn" type="button">＋ Zoom In</button>
     <button class="toolbtn" id="zoomOut" type="button">－ Zoom Out</button>
@@ -241,6 +331,11 @@ const lastNameInput = document.getElementById('directoryLastName');
 const loginButton = document.getElementById('passwordButton');
 const loginError = document.getElementById('passwordError');
 const logoutButton = document.getElementById('logoutButton');
+const directoryButton = document.getElementById('directoryButton');
+const documentsButton = document.getElementById('documentsButton');
+const rememberLogin = document.getElementById('rememberLogin');
+const SAVED_LOT_KEY = 'hdeSavedLot';
+const SAVED_LAST_NAME_KEY = 'hdeSavedLastName';
 
 function clearDirectoryData() {
   directory = {};
@@ -274,10 +369,28 @@ function lockDirectory(message) {
 
   gate.classList.remove('unlocked');
   logoutButton.classList.remove('visible');
-  document.body.style.overflow = 'hidden';
+  try {
+  const savedLot = localStorage.getItem(SAVED_LOT_KEY) || '';
+  const savedLastName = localStorage.getItem(SAVED_LAST_NAME_KEY) || '';
+  if (savedLot || savedLastName) {
+    lotInput.value = savedLot;
+    lastNameInput.value = savedLastName;
+    rememberLogin.checked = true;
+  }
+} catch (error) {}
 
-  lotInput.value = '';
-  lastNameInput.value = '';
+document.body.style.overflow = 'hidden';
+
+  let savedLot = '';
+  let savedLastName = '';
+  try {
+    savedLot = localStorage.getItem(SAVED_LOT_KEY) || '';
+    savedLastName = localStorage.getItem(SAVED_LAST_NAME_KEY) || '';
+  } catch (error) {}
+
+  lotInput.value = savedLot;
+  lastNameInput.value = savedLastName;
+  rememberLogin.checked = Boolean(savedLot || savedLastName);
 
   if (message) {
     showLoginError(message);
@@ -313,7 +426,7 @@ function unlockDirectory() {
 
   gate.classList.add('unlocked');
   logoutButton.classList.add('visible');
-  document.body.style.overflow = '';
+  document.body.style.overflow = window.innerWidth <= 980 ? '' : 'hidden';
   startSessionTimer(expiresAt);
 }
 
@@ -552,6 +665,8 @@ const hctx = hidden.getContext('2d', {willReadFrequently:true});
 const colorMap = document.getElementById('colorMap');
 let scale = 0.44, tx = 0, ty = -60;
 let selectedLot = null;
+let selectedRegion = null;
+const regionCache = {};
 let lastMask = null;
 let dragging=false, sx=0, sy=0, stx=0, sty=0;
 const activePointers = new Map();
@@ -644,6 +759,29 @@ function nearestLot(x,y) {
     if(d<bd) {bd=d; best=lot;}
   }
   return best;
+}
+
+function regionForLot(lot) {
+  const key = String(lot);
+  if (regionCache[key]) return regionCache[key];
+  const center = centers[key];
+  if (!center || !colorMap.complete) return null;
+  const region = floodRegion(center[0], center[1]);
+  if (region) regionCache[key] = region;
+  return region;
+}
+
+function previewLotOnMap(lot) {
+  const region = regionForLot(lot);
+  drawHighlight(region, lot);
+}
+
+function restoreSelectedHighlight() {
+  if (!selectedLot) {
+    ctx.clearRect(0,0,W,H);
+    return;
+  }
+  drawHighlight(selectedRegion || regionForLot(selectedLot), selectedLot);
 }
 function drawHighlight(region, lot) {
   ctx.clearRect(0,0,W,H);
@@ -889,6 +1027,7 @@ function renderCommunityTab(tab='board') {
 }
 function showCommunityDetails(region=null, tab='board') {
   selectedLot = 'clubhouse';
+  selectedRegion = region || regionForLot('clubhouse');
   setDetailsHTML(`
     <h2>Clubhouse</h2>
     <div class="mobileSummary">${communityAddress}</div>
@@ -906,7 +1045,7 @@ function showCommunityDetails(region=null, tab='board') {
     <div class="section" id="communityContent"></div>`, 'collapsed');
   document.querySelectorAll('.tabbtn').forEach(btn => btn.addEventListener('click', () => { renderCommunityTab(btn.dataset.tab); decorateMobileSheet(); }));
   renderCommunityTab(tab);
-  drawHighlight(region, 'clubhouse');
+  drawHighlight(selectedRegion, 'clubhouse');
   if (window.innerWidth <= 980) document.getElementById('details').scrollTop = 0;
 }
 function showDetails(lot, region=null) {
@@ -917,7 +1056,8 @@ function showDetails(lot, region=null) {
     return;
   }
   selectedLot = incomingLot;
-  if (selectedLot === 'clubhouse') { showCommunityDetails(region); return; }
+  selectedRegion = region || regionForLot(incomingLot);
+  if (selectedLot === 'clubhouse') { showCommunityDetails(selectedRegion); return; }
   const d = directory[lot] || {lot:lot, owners:'Lot '+lot, address:'', phones:[], emails:[], notes:''};
   const phoneHtml = (d.phones||[]).map(p=>`<div class="phone"><b>${p.label||'Phone'}</b><br><a href="tel:${String(p.number).replace(/\D/g,'')}">${fmtPhone(p.number)}</a></div>`).join('') || '<p class="small">No phone listed</p>';
   const emailHtml = (d.emails||[]).map(e=>`<div class="email"><b>${e.label||'Email'}</b><br><a href="mailto:${e.email}">${e.email}</a></div>`).join('') || '<p class="small">No email listed</p>';
@@ -929,8 +1069,71 @@ function showDetails(lot, region=null) {
     <div class="section"><h3>☎ Phone Numbers</h3>${phoneHtml}</div>
     <div class="section"><h3>✉ Email</h3>${emailHtml}</div>
     <div class="section"><h3>▣ Notes</h3><div>${d.notes||'--'}</div></div>`, 'collapsed');
-  if(region) drawHighlight(region, lot); else drawHighlight(null, lot);
+  drawHighlight(selectedRegion, lot);
 }
+
+function showDirectoryList() {
+  selectedLot = null;
+  selectedRegion = null;
+  ctx.clearRect(0,0,W,H);
+
+  const entries = Object.values(directory)
+    .filter(d => d && d.lot)
+    .sort((a,b) => String(a.owners || '').localeCompare(String(b.owners || '')));
+
+  const rows = entries.map(d => `
+    <button class="directoryEntry" type="button" data-lot="${escHtml(d.lot)}">
+      <span class="ownerName">${escHtml(d.owners || 'Owner not listed')}</span>
+      <span class="lotNumber">Lot ${escHtml(d.lot)}</span>
+    </button>`).join('');
+
+  setDetailsHTML(`
+    <div class="panelHeading"><h2>Resident Directory</h2></div>
+    <p class="small panelSubtext">Hover over a name to highlight the lot. Click a name to open the homeowner information.</p>
+    <div class="directoryList">${rows || '<p class="small">No residents listed.</p>'}</div>
+  `, 'expanded');
+
+  const detailsPanel = document.getElementById('details');
+  detailsPanel.scrollTop = 0;
+
+  detailsPanel.querySelectorAll('.directoryEntry').forEach(entry => {
+    const lot = entry.dataset.lot;
+    entry.addEventListener('mouseenter', () => previewLotOnMap(lot));
+    entry.addEventListener('focus', () => previewLotOnMap(lot));
+    entry.addEventListener('mouseleave', restoreSelectedHighlight);
+    entry.addEventListener('blur', restoreSelectedHighlight);
+    entry.addEventListener('click', () => showDetails(lot, regionForLot(lot)));
+  });
+}
+
+function showAllDocuments() {
+  selectedLot = null;
+  selectedRegion = null;
+  ctx.clearRect(0,0,W,H);
+
+  const cards = documentLinks.map(d => {
+    const title = escHtml(d.title || 'Document');
+    const desc = escHtml(d.description || '');
+    const url = escHtml(d.url || '#');
+    return `
+      <a class="docCard" href="${url}" target="_blank" rel="noopener">
+        <div class="docTitle">📄 ${title}</div>
+        ${desc ? `<div class="docDesc">${desc}</div>` : ''}
+      </a>`;
+  }).join('');
+
+  setDetailsHTML(`
+    <div class="panelHeading"><h2>HOA Documents</h2></div>
+    <p class="small panelSubtext">Click a document to open it in a new tab.</p>
+    <div>${cards || '<p class="small">No documents listed.</p>'}</div>
+  `, 'expanded');
+
+  document.getElementById('details').scrollTop = 0;
+}
+
+directoryButton.addEventListener('click', showDirectoryList);
+documentsButton.addEventListener('click', showAllDocuments);
+
 function selectAt(clientX,clientY) {
   const p = screenToMap(clientX,clientY);
   const region = floodRegion(p.x,p.y);
@@ -1008,7 +1211,11 @@ function endPointer(e) {
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', e=>{ activePointers.delete(e.pointerId); pinching=false; dragging=false; });
-stage.addEventListener('wheel', e=>{ e.preventDefault(); zoomAt(e.clientX, e.clientY, e.deltaY<0?1.15:.87); }, {passive:false});
+stage.addEventListener('wheel', e=>{
+  e.preventDefault();
+  e.stopPropagation();
+  zoomAt(e.clientX, e.clientY, e.deltaY<0?1.15:.87);
+}, {passive:false});
 document.getElementById('zoomIn').onclick=()=>zoomAt(stage.getBoundingClientRect().left + stage.clientWidth/2, stage.getBoundingClientRect().top + stage.clientHeight/2, 1.2);
 document.getElementById('zoomOut').onclick=()=>zoomAt(stage.getBoundingClientRect().left + stage.clientWidth/2, stage.getBoundingClientRect().top + stage.clientHeight/2, 1/1.2);
 document.getElementById('reset').onclick=resetView;
@@ -1033,7 +1240,10 @@ function search(q) {
 document.getElementById('search').addEventListener('input', e=>search(e.target.value));
 initSheetDrag();
 colorMap.onload = () => { hctx.drawImage(colorMap,0,0,W,H); resetView(); };
-window.addEventListener('resize', resetView);
+window.addEventListener('resize', () => {
+  document.body.style.overflow = window.innerWidth <= 980 ? '' : 'hidden';
+  resetView();
+});
 mapLayer.addEventListener('load', resetView);
 if(colorMap.complete) colorMap.onload();
 </script>
